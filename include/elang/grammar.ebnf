@@ -1,0 +1,79 @@
+program := { import-decl } { func-decl | extern-func-decl | func_def }
+
+import-decl := IMPORT STRING_LIT | identifier
+
+raw-type := INT
+          | BOOL
+          | VOID
+          | CHAR
+
+qual-type := raw-type
+           | "[" qual-type ";" INT_LIT "]"
+           | "*" qual-type
+
+func-decl := FUNC IDENTIFIER "(" params ")" [ "->" qual-type ] ";"
+
+extern-func-decl := EXTERN FUNC IDENTIFIER "(" params ")" [ "->" qual-type ] ";"
+
+func-def  := FUNC IDENTIFIER "(" params ")" [ "->" qual-type ] compound-stmt
+
+params := [ identifier ":" qual-type { "," identifier ":" qual-type } ]
+
+compound-stmt := "{" { stmt-list } "}"
+
+stmt := let-stmt
+      | expr-stmt
+      | compound-stmt
+      | selection-stmt
+      | iteration-stmt
+      | return-stmt
+
+let-stmt := LET IDENTIFIER ":" qual-type [ "=" expr ] ";"
+
+expr-stmt := [ expression ] ";"
+
+selection-stmt := IF expr compound-stmt { ELSE IF expr compound-stmt } [ ELSE compound-stmt ]
+
+iteration-stmt := WHILE expr compound-stmt
+
+return-stmt := RETURN [ expr ] ";"
+
+expr := log-or-expr [ assignop expr ]
+
+log-or-expr := log-and-expr { "||" log-and-expr }
+
+log-and-expr := simple-expr { "&&" simple-expr }
+
+simple-expr := add-expr [ relop add-expr ]
+
+add-expr := term-expr { addop term-expr }
+
+term-expr := cast-expr { mulop cast-expr }
+
+cast-expr := unary-expr [ AS qual-type ]
+
+unary-expr := [ unop ] subscript-expr
+
+subscript-expr := factor-expr { "[" expr "]" }
+
+factor-expr := "(" expression ")"
+             | identifier-expr
+             | identifier-expr "(" args ")"
+             | call-expr
+             | INT_LIT
+             | DOUBLE_LIT
+             | CHAR_LIT
+             | STRING_LIT
+             | BOOL_LIT
+
+identifier-expr := identifier { "::" identifier }
+
+args := [ expr { "," expr } ]
+
+assignop := "="
+logop := "&&" | "||"
+relop := "<=" | "<" | ">" | ">=" | "==" | "!="
+addop := "+" | "-"
+mulop := "/" | "*" | "%"
+unop  := "+" | "-" | "!" | "*" | "&"
+

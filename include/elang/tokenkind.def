@@ -1,0 +1,69 @@
+#ifndef TOK
+#define TOK(X)
+#endif
+
+#ifndef PUNCTUATOR
+#define PUNCTUATOR(X, Y) TOK(X)
+#endif
+
+#ifndef KEYWORD
+#define KEYWORD(X) TOK(kw_ ## X)
+#endif
+
+TOK(eof)
+TOK(comment)
+TOK(identifier)
+TOK(int_literal)
+TOK(double_literal)
+TOK(string_literal)
+TOK(char_literal)
+TOK(boolean_literal)
+
+PUNCTUATOR(l_square,            "[")
+PUNCTUATOR(r_square,            "]")
+PUNCTUATOR(l_paren,             "(")
+PUNCTUATOR(r_paren,             ")")
+PUNCTUATOR(l_brace,             "{")
+PUNCTUATOR(r_brace,             "}")
+PUNCTUATOR(star,                "*")
+PUNCTUATOR(plus,                "+")
+PUNCTUATOR(minus,               "-")
+PUNCTUATOR(percent,             "%")
+PUNCTUATOR(exclaimequal,        "!=")
+PUNCTUATOR(exclaim,             "!")
+PUNCTUATOR(slash,               "/")
+PUNCTUATOR(less,                "<")
+PUNCTUATOR(lessequal,           "<=")
+PUNCTUATOR(greater,             ">")
+PUNCTUATOR(greaterequal,        ">=")
+PUNCTUATOR(semi,                ";")
+PUNCTUATOR(equal,               "=")
+PUNCTUATOR(equalequal,          "==")
+PUNCTUATOR(comma,               ",")
+PUNCTUATOR(colon,               ":")
+PUNCTUATOR(coloncolon,          "::")
+PUNCTUATOR(arrow,               "->")
+PUNCTUATOR(dot,                 ".")
+PUNCTUATOR(amp,                 "&")
+PUNCTUATOR(ampamp,              "&&")
+PUNCTUATOR(pipe,                "|")
+PUNCTUATOR(pipepipe,            "||")
+
+KEYWORD(import)
+KEYWORD(func)
+KEYWORD(extern)
+KEYWORD(let)
+KEYWORD(if)
+KEYWORD(else)
+KEYWORD(return)
+KEYWORD(int)
+KEYWORD(double)
+KEYWORD(void)
+KEYWORD(bool)
+KEYWORD(char)
+KEYWORD(while)
+KEYWORD(as)
+
+#undef TOK
+#undef PUNCTUATOR
+#undef KEYWORD
