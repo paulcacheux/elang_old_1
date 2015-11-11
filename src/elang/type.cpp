@@ -15,6 +15,8 @@ std::string BuiltinType::toString() const {
         return "void";
     case BuiltinType::Kind::Int_ty:
         return "int";
+    case BuiltinType::Kind::Double_ty:
+        return "double";
     case BuiltinType::Kind::Char_ty:
         return "char";
     case BuiltinType::Kind::Bool_ty:
@@ -38,12 +40,12 @@ std::string PointerType::toString() const {
     return "*" + subtype->toString();
 }
 
-ReferenceType::ReferenceType(Type* subtype)
-    : Type(Type::Variety::Reference), subtype(subtype) {
+LValueType::LValueType(Type* subtype)
+    : Type(Type::Variety::LValue), subtype(subtype) {
 }
 
-std::string ReferenceType::toString() const {
-    return "&" + subtype->toString();
+std::string LValueType::toString() const {
+    return subtype->toString() + "<lval>";
 }
 
 FunctionType::FunctionType(Type* return_ty, std::vector<Type*> params_ty)
@@ -89,6 +91,10 @@ BuiltinType* TypeManager::getIntType() {
     return &_int_ty;
 }
 
+BuiltinType* TypeManager::getDoubleType() {
+    return &_double_ty;
+}
+
 BuiltinType* TypeManager::getCharType() {
     return &_char_ty;
 }
@@ -114,12 +120,12 @@ PointerType* TypeManager::getPointerType(Type* subtype) {
     return _ptr_types[subtype];
 }
 
-ReferenceType* TypeManager::getReferenceType(Type* subtype) {
-    if (_ref_types.find(subtype) != _ref_types.end()) {
-        return _ref_types[subtype];
+LValueType* TypeManager::getLValueType(Type* subtype) {
+    if (_lval_types.find(subtype) != _lval_types.end()) {
+        return _lval_types[subtype];
     }
-    _ref_types[subtype] = new ReferenceType(subtype);
-    return _ref_types[subtype];
+    _lval_types[subtype] = new LValueType(subtype);
+    return _lval_types[subtype];
 }
 
 FunctionType* TypeManager::getFunctionType(Type* ret_ty,

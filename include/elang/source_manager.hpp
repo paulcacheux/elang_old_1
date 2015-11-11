@@ -5,7 +5,7 @@
 #include <string>
 
 #include <elang/type.hpp>
-#include <elang/diagnoctic.hpp>
+#include <elang/diagnostic.hpp>
 #include <elang/source_reader.hpp>
 #include <elang/user_location.hpp>
 

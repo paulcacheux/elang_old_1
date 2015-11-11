@@ -21,10 +21,11 @@ class Parser {
 
   public:
     Parser(Lexer* lexer, SourceManager* sm);
-    std::unique_ptr<ast::TranslationUnit> parseTranslationUnit();
+    std::unique_ptr<ast::Module> parseMainModule();
 
   private:
-    std::unique_ptr<ast::ImportDeclaration> parseImportDeclaration();
+    std::unique_ptr<ast::Declaration> parseDeclaration();
+    std::unique_ptr<ast::Module> parseModule();
     std::unique_ptr<ast::FunctionDeclaration> parseFunctionDeclaration();
     Type* parseQualType();
     BuiltinType* parseBuiltinType();
@@ -50,7 +51,6 @@ class Parser {
     std::unique_ptr<ast::IdentifierReference> parseIdentifierReference();
     std::vector<std::unique_ptr<ast::Expression>> parseArgs();
 
-    bool isNext(Token::Kind kind);
     void expect(Token::Kind kind);
     Token accept(Token::Kind kind);
 };

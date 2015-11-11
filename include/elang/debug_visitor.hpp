@@ -30,11 +30,8 @@ class DebugVisitor : public Visitor {
     virtual void visit(SelectionStatement* node) override;
     virtual void visit(IterationStatement* node) override;
     virtual void visit(ReturnStatement* node) override;
-    virtual void visit(ImportDeclaration* node) override;
     virtual void visit(FunctionDeclaration* node) override;
-    virtual void visit(ExternFunctionDeclaration* node) override;
     virtual void visit(FunctionDefinition* node) override;
-    virtual void visit(TranslationUnit* node) override;
     virtual void visit(Module* node) override;
 };
 

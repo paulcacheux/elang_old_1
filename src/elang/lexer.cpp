@@ -4,7 +4,7 @@
 #include <cassert>
 
 #include <elang/source_manager.hpp>
-#include <elang/diagnoctic.hpp>
+#include <elang/diagnostic.hpp>
 #include <elang/source_location.hpp>
 
 // utils
@@ -107,8 +107,7 @@ Token Lexer::getToken() {
         std::string literal_string;
         while (_reader.peek() != '\"') {
             if (_reader.peek() == std::char_traits<char>::eof()) {
-                _diag_engine->report(ErrorLevel::Error, token_location,
-                                     "Unclosed string literal");
+                _diag_engine->report(token_location, "Unclosed string literal");
             }
             literal_string.push_back(readLiteralChar());
         }
@@ -119,8 +118,7 @@ Token Lexer::getToken() {
         std::string literal_char;
         literal_char.push_back(readLiteralChar());
         if (_reader.get() != '\'') {
-            _diag_engine->report(ErrorLevel::Error, token_location,
-                                 "Unclosed char literal");
+            _diag_engine->report(token_location, "Unclosed char literal");
         }
         return Token{Token::Kind::char_literal, token_location, literal_char};
     } else if (current == '#') {
@@ -211,8 +209,7 @@ char Lexer::readLiteralChar() {
             c = '\\';
             break;
         default:
-            _diag_engine->report(ErrorLevel::Error,
-                                 _reader.getCurrentLocation(),
+            _diag_engine->report(_reader.getCurrentLocation(),
                                  "Wrong escaped char");
         }
     }

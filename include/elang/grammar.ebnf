@@ -1,8 +1,14 @@
-program := { import-decl } { func-decl | extern-func-decl | func_def }
+program := { decl }
 
-import-decl := IMPORT STRING_LIT | identifier
+decl := mod-decl
+      | func-decl
+      | extern-func-decl
+      | func_def
+
+mod-decl := mod IDENTIFIER "{" { decl } "}"
 
 raw-type := INT
+          | DOUBLE
           | BOOL
           | VOID
           | CHAR
@@ -12,8 +18,6 @@ qual-type := raw-type
            | "*" qual-type
 
 func-decl := FUNC IDENTIFIER "(" params ")" [ "->" qual-type ] ";"
-
-extern-func-decl := EXTERN FUNC IDENTIFIER "(" params ")" [ "->" qual-type ] ";"
 
 func-def  := FUNC IDENTIFIER "(" params ")" [ "->" qual-type ] compound-stmt
 
@@ -28,7 +32,8 @@ stmt := let-stmt
       | iteration-stmt
       | return-stmt
 
-let-stmt := LET IDENTIFIER ":" qual-type [ "=" expr ] ";"
+let-stmt := LET IDENTIFIER "=" expr ";"
+          | LET IDENTIFIER ":" qual-type [ "=" expr ] ";"
 
 expr-stmt := [ expression ] ";"
 

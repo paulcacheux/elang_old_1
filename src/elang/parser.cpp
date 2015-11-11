@@ -2,7 +2,7 @@
 
 #include <elang/source_manager.hpp>
 #include <elang/lexer.hpp>
-#include <elang/diagnoctic.hpp>
+#include <elang/diagnostic.hpp>
 
 namespace elang {
 
@@ -11,68 +11,75 @@ Parser::Parser(Lexer* lexer, SourceManager* sm)
       _diag_engine(sm->getDiagnosticEngine()) {
 }
 
-std::unique_ptr<ast::TranslationUnit> Parser::parseTranslationUnit() {
-    std::vector<std::unique_ptr<ast::ImportDeclaration>> imports;
-    while (_lexer->peekToken().is(Token::Kind::kw_import)) {
-        imports.push_back(parseImportDeclaration());
-    }
-
-    std::vector<std::unique_ptr<ast::FunctionDeclaration>> func_decls;
+std::unique_ptr<ast::Module> Parser::parseMainModule() {
+    auto loc = _lexer->peekToken().location;
+    std::vector<std::unique_ptr<ast::Declaration>> declarations;
     while (_lexer->peekToken().isNot(Token::Kind::eof)) {
-        func_decls.push_back(parseFunctionDeclaration());
+        declarations.push_back(parseDeclaration());
     }
-    return std::make_unique<ast::TranslationUnit>(std::move(imports),
-                                                  std::move(func_decls));
+    return std::make_unique<ast::Module>("", std::move(declarations), loc);
 }
 
-std::unique_ptr<ast::ImportDeclaration> Parser::parseImportDeclaration() {
-    expect(Token::Kind::kw_import);
-    // TODO change to string
-    auto import = accept(Token::Kind::identifier).value;
-    return std::make_unique<ast::ImportDeclaration>(import);
+std::unique_ptr<ast::Declaration> Parser::parseDeclaration() {
+    if (_lexer->peekToken().is(Token::Kind::kw_mod)) {
+        return std::move(parseModule());
+    } else if (_lexer->peekToken().is(Token::Kind::kw_func)) {
+        return std::move(parseFunctionDeclaration());
+    } else {
+        _diag_engine->report(_lexer->getToken().location, "Unexpected token");
+        return parseDeclaration();
+    }
+}
+
+std::unique_ptr<ast::Module> Parser::parseModule() {
+    auto loc = accept(Token::Kind::kw_mod).location;
+    auto name = accept(Token::Kind::identifier).value;
+    expect(Token::Kind::l_brace);
+
+    std::vector<std::unique_ptr<ast::Declaration>> declarations;
+    while (_lexer->peekToken().isNot(Token::Kind::r_brace)) {
+        declarations.push_back(parseDeclaration());
+    }
+    expect(Token::Kind::r_brace);
+    return std::make_unique<ast::Module>(name, std::move(declarations), loc);
 }
 
 std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunctionDeclaration() {
-    bool is_extern = false;
-    if (isNext(Token::Kind::kw_extern))
-        is_extern = true;
-
-    expect(Token::Kind::kw_func);
+    auto loc = accept(Token::Kind::kw_func).location;
     auto name = accept(Token::Kind::identifier).value;
     expect(Token::Kind::l_paren);
     auto params = readParams();
     expect(Token::Kind::r_paren);
 
     Type* ret_type = _type_manager->getVoidType();
-    if (isNext(Token::Kind::arrow)) {
+    if (_lexer->peekToken().is(Token::Kind::arrow)) {
+        _lexer->getToken();
         ret_type = parseQualType();
     }
 
     FunctionType* func_ty
         = _type_manager->getFunctionType(ret_type, params.second);
 
-    if (is_extern) {
-        expect(Token::Kind::semi);
-        return std::make_unique<ast::ExternFunctionDeclaration>(name, func_ty);
-    }
-
-    if (isNext(Token::Kind::semi)) {
-        return std::make_unique<ast::FunctionDeclaration>(name, func_ty);
+    if (_lexer->peekToken().is(Token::Kind::semi)) {
+        _lexer->getToken();
+        return std::make_unique<ast::FunctionDeclaration>(name, func_ty, loc);
     }
 
     auto content_stmt = parseCompoundStatement();
     return std::make_unique<ast::FunctionDefinition>(
-        name, func_ty, params.first, std::move(content_stmt));
+        name, func_ty, params.first, std::move(content_stmt), loc);
 }
 
 Type* Parser::parseQualType() {
-    if (isNext(Token::Kind::l_square)) {
+    if (_lexer->peekToken().is(Token::Kind::l_square)) {
+        _lexer->getToken();
         auto subtype = parseQualType();
         expect(Token::Kind::semi);
         auto size = std::stoll(accept(Token::Kind::int_literal).value);
         expect(Token::Kind::r_square);
         return _type_manager->getArrayType(subtype, size);
-    } else if (isNext(Token::Kind::star)) {
+    } else if (_lexer->peekToken().is(Token::Kind::star)) {
+        _lexer->getToken();
         auto subtype = parseQualType();
         return _type_manager->getPointerType(subtype);
     } else {
@@ -81,17 +88,17 @@ Type* Parser::parseQualType() {
 }
 
 BuiltinType* Parser::parseBuiltinType() {
-    if (isNext(Token::Kind::kw_int)) {
+    auto tok = _lexer->getToken();
+    if (tok.is(Token::Kind::kw_int)) {
         return _type_manager->getIntType();
-    } else if (isNext(Token::Kind::kw_void)) {
+    } else if (tok.is(Token::Kind::kw_void)) {
         return _type_manager->getVoidType();
-    } else if (isNext(Token::Kind::kw_bool)) {
+    } else if (tok.is(Token::Kind::kw_bool)) {
         return _type_manager->getBoolType();
-    } else if (isNext(Token::Kind::kw_char)) {
+    } else if (tok.is(Token::Kind::kw_char)) {
         return _type_manager->getCharType();
     } else {
-        _diag_engine->report(ErrorLevel::Error, _lexer->getToken().location,
-                             "Unexpected token");
+        _diag_engine->report(tok.location, "Unexpected token");
 
         return parseBuiltinType();
     }
@@ -139,33 +146,43 @@ std::unique_ptr<ast::Statement> Parser::parseStatement() {
 }
 
 std::unique_ptr<ast::LetStatement> Parser::parseLetStatement() {
-    expect(Token::Kind::kw_let);
+    auto loc = accept(Token::Kind::kw_let).location;
     auto name = accept(Token::Kind::identifier).value;
-    expect(Token::Kind::colon);
-    auto type = parseQualType();
 
-    std::unique_ptr<ast::Expression> init_expr{nullptr};
-    if (isNext(Token::Kind::equal)) {
+    Type* type = nullptr;
+    std::unique_ptr<ast::Expression> init_expr = nullptr;
+
+    auto tok = _lexer->getToken();
+    if (tok.is(Token::Kind::colon)) {
+        type = parseQualType();
+        if (_lexer->peekToken().is(Token::Kind::equal)) {
+            _lexer->getToken();
+            init_expr = parseExpression();
+        }
+    } else if (tok.is(Token::Kind::equal)) {
         init_expr = parseExpression();
+    } else {
+        _diag_engine->report(ErrorLevel::FatalError, loc,
+                             "you must provide an initializer or a type");
     }
 
     expect(Token::Kind::semi);
-    return std::make_unique<ast::LetStatement>(type, name,
-                                               std::move(init_expr));
+    return std::make_unique<ast::LetStatement>(type, name, std::move(init_expr),
+                                               loc);
 }
 
 std::unique_ptr<ast::CompoundStatement> Parser::parseCompoundStatement() {
-    expect(Token::Kind::l_brace);
+    auto loc = accept(Token::Kind::l_brace).location;
     std::vector<std::unique_ptr<ast::Statement>> stmts;
     while (_lexer->peekToken().isNot(Token::Kind::r_brace)) {
         stmts.push_back(std::move(parseStatement()));
     }
     expect(Token::Kind::r_brace);
-    return std::make_unique<ast::CompoundStatement>(std::move(stmts));
+    return std::make_unique<ast::CompoundStatement>(std::move(stmts), loc);
 }
 
 std::unique_ptr<ast::SelectionStatement> Parser::parseSelectionStatement() {
-    expect(Token::Kind::kw_if);
+    auto loc = accept(Token::Kind::kw_if).location;
     auto condition = parseExpression();
     auto stmt = parseCompoundStatement();
 
@@ -174,8 +191,10 @@ std::unique_ptr<ast::SelectionStatement> Parser::parseSelectionStatement() {
     choices.emplace_back(std::move(condition), std::move(stmt));
 
     std::unique_ptr<ast::CompoundStatement> else_stmt{nullptr};
-    while (isNext(Token::Kind::kw_else)) {
-        if (isNext(Token::Kind::kw_if)) {
+    while (_lexer->peekToken().is(Token::Kind::kw_else)) {
+        _lexer->getToken();
+        if (_lexer->peekToken().is(Token::Kind::kw_if)) {
+            _lexer->getToken();
             auto condition = parseExpression();
             auto stmt = parseCompoundStatement();
             choices.emplace_back(std::move(condition), std::move(stmt));
@@ -185,65 +204,72 @@ std::unique_ptr<ast::SelectionStatement> Parser::parseSelectionStatement() {
         }
     }
     return std::make_unique<ast::SelectionStatement>(std::move(choices),
-                                                     std::move(else_stmt));
+                                                     std::move(else_stmt), loc);
 }
 
 std::unique_ptr<ast::IterationStatement> Parser::parseIterationStatement() {
-    expect(Token::Kind::kw_while);
+    auto loc = accept(Token::Kind::kw_while).location;
     auto condition = parseExpression();
     auto stmt = parseCompoundStatement();
     return std::make_unique<ast::IterationStatement>(std::move(condition),
-                                                     std::move(stmt));
+                                                     std::move(stmt), loc);
 }
 
 std::unique_ptr<ast::ReturnStatement> Parser::parseReturnStatement() {
-    expect(Token::Kind::kw_return);
+    auto loc = accept(Token::Kind::kw_return).location;
     std::unique_ptr<ast::Expression> expr{nullptr};
     if (_lexer->peekToken().isNot(Token::Kind::semi)) {
         expr = parseExpression();
     }
     expect(Token::Kind::semi);
-    return std::make_unique<ast::ReturnStatement>(std::move(expr));
+    return std::make_unique<ast::ReturnStatement>(std::move(expr), loc);
 }
 
 std::unique_ptr<ast::ExpressionStatement> Parser::parseExpressionStatement() {
     std::unique_ptr<ast::Expression> expr{nullptr};
+    SourceLocation loc = _lexer->peekToken().location; // just to initalize
     if (_lexer->peekToken().isNot(Token::Kind::semi)) {
         expr = parseExpression();
+        loc = expr->location;
+        expect(Token::Kind::semi);
+    } else {
+        loc = accept(Token::Kind::semi).location;
     }
-    expect(Token::Kind::semi);
-    return std::make_unique<ast::ExpressionStatement>(std::move(expr));
+    return std::make_unique<ast::ExpressionStatement>(std::move(expr), loc);
 }
 
 std::unique_ptr<ast::Expression> Parser::parseExpression() {
     auto rhs_expr = parseLogicalOrExpression();
-    if (isNext(Token::Kind::equal)) {
+    if (_lexer->peekToken().is(Token::Kind::equal)) {
+        auto loc = _lexer->getToken().location;
         auto lhs_expr = parseExpression();
         rhs_expr = std::make_unique<ast::BinaryOperator>(
             ast::BinaryOperator::Kind::Assign, std::move(rhs_expr),
-            std::move(lhs_expr));
+            std::move(lhs_expr), loc);
     }
     return std::move(rhs_expr);
 }
 
 std::unique_ptr<ast::Expression> Parser::parseLogicalOrExpression() {
     auto rhs_expr = parseLogicalAndExpression();
-    while (isNext(Token::Kind::pipepipe)) {
+    while (_lexer->peekToken().is(Token::Kind::pipepipe)) {
+        auto loc = _lexer->getToken().location;
         auto lhs_expr = parseLogicalAndExpression();
         rhs_expr = std::make_unique<ast::BinaryOperator>(
             ast::BinaryOperator::Kind::LogicalOr, std::move(rhs_expr),
-            std::move(lhs_expr));
+            std::move(lhs_expr), loc);
     }
     return std::move(rhs_expr);
 }
 
 std::unique_ptr<ast::Expression> Parser::parseLogicalAndExpression() {
     auto rhs_expr = parseSimpleExpression();
-    while (isNext(Token::Kind::ampamp)) {
+    while (_lexer->peekToken().is(Token::Kind::ampamp)) {
+        auto loc = _lexer->getToken().location;
         auto lhs_expr = parseSimpleExpression();
         rhs_expr = std::make_unique<ast::BinaryOperator>(
             ast::BinaryOperator::Kind::LogicalAnd, std::move(rhs_expr),
-            std::move(lhs_expr));
+            std::move(lhs_expr), loc);
     }
     return std::move(rhs_expr);
 }
@@ -254,6 +280,7 @@ std::unique_ptr<ast::Expression> Parser::parseSimpleExpression() {
             Token::Kind::lessequal, Token::Kind::less, Token::Kind::greater,
             Token::Kind::greaterequal, Token::Kind::equalequal,
             Token::Kind::exclaimequal)) {
+        auto loc = _lexer->peekToken().location;
         ast::BinaryOperator::Kind kind;
         auto tok_kind = _lexer->getToken().kind;
         if (tok_kind == Token::Kind::lessequal)
@@ -271,7 +298,7 @@ std::unique_ptr<ast::Expression> Parser::parseSimpleExpression() {
 
         auto lhs_expr = parseAddExpression();
         rhs_expr = std::make_unique<ast::BinaryOperator>(
-            kind, std::move(rhs_expr), std::move(lhs_expr));
+            kind, std::move(rhs_expr), std::move(lhs_expr), loc);
     }
     return std::move(rhs_expr);
 }
@@ -279,6 +306,7 @@ std::unique_ptr<ast::Expression> Parser::parseSimpleExpression() {
 std::unique_ptr<ast::Expression> Parser::parseAddExpression() {
     auto rhs_expr = parseTermExpression();
     while (_lexer->peekToken().isOneOf(Token::Kind::plus, Token::Kind::minus)) {
+        auto loc = _lexer->peekToken().location;
         ast::BinaryOperator::Kind kind;
         auto tok_kind = _lexer->getToken().kind;
         if (tok_kind == Token::Kind::plus)
@@ -288,7 +316,7 @@ std::unique_ptr<ast::Expression> Parser::parseAddExpression() {
 
         auto lhs_expr = parseTermExpression();
         rhs_expr = std::make_unique<ast::BinaryOperator>(
-            kind, std::move(rhs_expr), std::move(lhs_expr));
+            kind, std::move(rhs_expr), std::move(lhs_expr), loc);
     }
     return std::move(rhs_expr);
 }
@@ -297,6 +325,7 @@ std::unique_ptr<ast::Expression> Parser::parseTermExpression() {
     auto rhs_expr = parseCastExpression();
     while (_lexer->peekToken().isOneOf(Token::Kind::star, Token::Kind::slash,
                                        Token::Kind::percent)) {
+        auto loc = _lexer->peekToken().location;
         ast::BinaryOperator::Kind kind;
         auto tok_kind = _lexer->getToken().kind;
         if (tok_kind == Token::Kind::star)
@@ -308,17 +337,18 @@ std::unique_ptr<ast::Expression> Parser::parseTermExpression() {
 
         auto lhs_expr = parseCastExpression();
         rhs_expr = std::make_unique<ast::BinaryOperator>(
-            kind, std::move(rhs_expr), std::move(lhs_expr));
+            kind, std::move(rhs_expr), std::move(lhs_expr), loc);
     }
     return std::move(rhs_expr);
 }
 
 std::unique_ptr<ast::Expression> Parser::parseCastExpression() {
     auto casted = parseUnaryExpression();
-    if (isNext(Token::Kind::kw_as)) {
+    if (_lexer->peekToken().is(Token::Kind::kw_as)) {
+        auto loc = _lexer->getToken().location;
         auto to_type = parseQualType();
-        return std::make_unique<ast::CastExpression>(std::move(casted),
-                                                     to_type);
+        return std::make_unique<ast::CastExpression>(std::move(casted), to_type,
+                                                     loc);
     }
     return std::move(casted);
 }
@@ -327,6 +357,7 @@ std::unique_ptr<ast::Expression> Parser::parseUnaryExpression() {
     if (_lexer->peekToken().isOneOf(Token::Kind::plus, Token::Kind::minus,
                                     Token::Kind::exclaim, Token::Kind::star,
                                     Token::Kind::amp)) {
+        auto loc = _lexer->peekToken().location;
         ast::UnaryOperator::Kind kind;
         auto tok_kind = _lexer->getToken().kind;
         if (tok_kind == Token::Kind::plus)
@@ -341,96 +372,109 @@ std::unique_ptr<ast::Expression> Parser::parseUnaryExpression() {
             kind = ast::UnaryOperator::Kind::AddressOf;
 
         auto expr = parseSubscriptExpression();
-        return std::make_unique<ast::UnaryOperator>(kind, std::move(expr));
+        return std::make_unique<ast::UnaryOperator>(kind, std::move(expr), loc);
     }
     return parseSubscriptExpression();
 }
 
 std::unique_ptr<ast::Expression> Parser::parseSubscriptExpression() {
     auto expr = parseFactorExpression();
-    while (isNext(Token::Kind::l_square)) {
+    while (_lexer->peekToken().is(Token::Kind::l_square)) {
+        auto loc = _lexer->getToken().location;
         auto index = parseExpression();
-        expr = std::make_unique<ast::SubscriptExpression>(std::move(expr),
-                                                          std::move(index));
+        expr = std::make_unique<ast::SubscriptExpression>(
+            std::move(expr), std::move(index), loc);
         expect(Token::Kind::r_square);
     }
     return std::move(expr);
 }
 
 std::unique_ptr<ast::Expression> Parser::parseFactorExpression() {
-    if (isNext(Token::Kind::l_paren)) {
+    if (_lexer->peekToken().is(Token::Kind::l_paren)) {
+        _lexer->getToken();
         auto expr = parseExpression();
         expect(Token::Kind::r_paren);
         return std::move(expr);
     } else if (_lexer->peekToken().is(Token::Kind::int_literal)) {
-        return std::make_unique<ast::IntLiteral>(
-            std::stoll(_lexer->getToken().value));
+        auto tok = _lexer->getToken();
+        return std::make_unique<ast::IntLiteral>(std::stoll(tok.value),
+                                                 tok.location);
     } else if (_lexer->peekToken().is(Token::Kind::char_literal)) {
-        return std::make_unique<ast::CharLiteral>(
-            _lexer->getToken().value.front());
+        auto tok = _lexer->getToken();
+        return std::make_unique<ast::CharLiteral>(tok.value.front(),
+                                                  tok.location);
     } else if (_lexer->peekToken().is(Token::Kind::double_literal)) {
-        return std::make_unique<ast::DoubleLiteral>(
-            std::stod(_lexer->getToken().value));
+        auto tok = _lexer->getToken();
+        return std::make_unique<ast::DoubleLiteral>(std::stod(tok.value),
+                                                    tok.location);
     } else if (_lexer->peekToken().is(Token::Kind::string_literal)) {
-        return std::make_unique<ast::StringLiteral>(_lexer->getToken().value);
+        auto tok = _lexer->getToken();
+        return std::make_unique<ast::StringLiteral>(tok.value, tok.location);
     } else if (_lexer->peekToken().is(Token::Kind::boolean_literal)) {
-        return std::make_unique<ast::BoolLiteral>(_lexer->getToken().value
-                                                  == "true");
+        auto tok = _lexer->getToken();
+        return std::make_unique<ast::BoolLiteral>(tok.value == "true",
+                                                  tok.location);
     } else {
         auto id_expr = parseIdentifierReference();
         if (_lexer->peekToken().is(Token::Kind::l_paren)) {
             _lexer->getToken();
             auto args = parseArgs();
-            expect(Token::Kind::r_paren);
+            auto loc = accept(Token::Kind::r_paren).location;
             return std::make_unique<ast::CallExpression>(std::move(id_expr),
-                                                         std::move(args));
+                                                         std::move(args), loc);
         }
         return std::move(id_expr);
     }
 }
 
 std::unique_ptr<ast::IdentifierReference> Parser::parseIdentifierReference() {
-    auto identifier_name = accept(Token::Kind::identifier).value;
+    std::string identifier_name;
     std::vector<std::string> module_path;
-    while (isNext(Token::Kind::coloncolon)) {
-        module_path.push_back(identifier_name);
-        identifier_name = accept(Token::Kind::identifier).value;
+    SourceLocation loc = _lexer->peekToken().location;
+
+    if (_lexer->peekToken().is(Token::Kind::coloncolon)) {
+        _lexer->getToken();
+        module_path.push_back("");
     }
+
+    auto tok = accept(Token::Kind::identifier);
+    loc = tok.location;
+    identifier_name = tok.value;
+
+    while (_lexer->peekToken().is(Token::Kind::coloncolon)) {
+        _lexer->getToken();
+        module_path.push_back(identifier_name);
+        tok = accept(Token::Kind::identifier);
+        loc = tok.location;
+        identifier_name = tok.value;
+    }
+
     return std::make_unique<ast::IdentifierReference>(identifier_name,
-                                                      module_path);
+                                                      module_path, loc);
 }
 
 std::vector<std::unique_ptr<ast::Expression>> Parser::parseArgs() {
     std::vector<std::unique_ptr<ast::Expression>> args;
     if (_lexer->peekToken().isNot(Token::Kind::r_paren)) {
         args.push_back(std::move(parseExpression()));
-        while (isNext(Token::Kind::comma)) {
+        while (_lexer->peekToken().is(Token::Kind::comma)) {
+            _lexer->getToken();
             args.push_back(std::move(parseExpression()));
         }
     }
     return std::move(args);
 }
 
-bool Parser::isNext(Token::Kind kind) {
-    auto result = _lexer->peekToken().is(kind);
-    if (result) {
-        _lexer->getToken();
-    }
-    return result;
-}
-
 void Parser::expect(Token::Kind kind) {
     while (!_lexer->peekToken().isOneOf(kind, Token::Kind::eof)) {
-        _diag_engine->report(ErrorLevel::Error, _lexer->getToken().location,
-                             "Unexpected token");
+        _diag_engine->report(_lexer->getToken().location, "Unexpected token");
     }
     _lexer->getToken();
 }
 
 Token Parser::accept(Token::Kind kind) {
     while (!_lexer->peekToken().isOneOf(kind, Token::Kind::eof)) {
-        _diag_engine->report(ErrorLevel::Error, _lexer->getToken().location,
-                             "Unexpected token");
+        _diag_engine->report(_lexer->getToken().location, "Unexpected token");
     }
     return _lexer->getToken();
 }

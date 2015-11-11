@@ -1,13 +1,29 @@
 #ifndef ELANG_AST_SEMA_VISITOR_H
 #define ELANG_AST_SEMA_VISITOR_H
 
+#include <vector>
+#include <string>
+#include <map>
+
+#include <elang/source_manager.hpp>
 #include <elang/ast_visitor.hpp>
+#include <elang/symbol_table.hpp>
+#include <elang/type.hpp>
+#include <elang/diagnostic.hpp>
 
 namespace elang {
 namespace ast {
 
 class SemaVisitor : public Visitor {
+    TypeManager* _type_manager;
+    DiagnosticEngine* _diag_engine;
+    SymbolTable _symbol_table;
+
+    Type* _current_return_ty;
+
   public:
+    explicit SemaVisitor(SourceManager* sm);
+
     virtual void visit(BinaryOperator* node) override;
     virtual void visit(UnaryOperator* node) override;
     virtual void visit(SubscriptExpression* node) override;
@@ -26,11 +42,8 @@ class SemaVisitor : public Visitor {
     virtual void visit(SelectionStatement* node) override;
     virtual void visit(IterationStatement* node) override;
     virtual void visit(ReturnStatement* node) override;
-    virtual void visit(ImportDeclaration* node) override;
     virtual void visit(FunctionDeclaration* node) override;
-    virtual void visit(ExternFunctionDeclaration* node) override;
     virtual void visit(FunctionDefinition* node) override;
-    virtual void visit(TranslationUnit* node) override;
     virtual void visit(Module* node) override;
 };
 

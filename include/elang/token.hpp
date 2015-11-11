@@ -34,7 +34,7 @@ class Token {
         return kind != k;
     }
 
-    bool isOneOf(Kind k1, Token::Kind k2) const noexcept {
+    bool isOneOf(Kind k1, Kind k2) const noexcept {
         return is(k1) || is(k2);
     }
 

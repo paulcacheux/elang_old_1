@@ -114,7 +114,7 @@ void DebugVisitor::visit(CastExpression* node) {
 void DebugVisitor::visit(LValueToRValueCastExpression* node) {
     std::cout << "(";
     node->lvalue->accept(this);
-    std::cout << " to rvalue";
+    std::cout << " to rvalue)";
 }
 
 void DebugVisitor::visit(IdentifierReference* node) {
@@ -155,8 +155,11 @@ void DebugVisitor::visit(CompoundStatement* node) {
 }
 
 void DebugVisitor::visit(LetStatement* node) {
-    std::cout << current_tab << "let " << node->name << " : "
-              << node->type->toString();
+    std::cout << current_tab << "let " << node->name;
+
+    if (node->type) {
+        std::cout << " : " << node->type->toString();
+    }
     if (node->init_expr) {
         std::cout << " = ";
         node->init_expr->accept(this);
@@ -208,16 +211,8 @@ void DebugVisitor::visit(ReturnStatement* node) {
     std::cout << ";";
 }
 
-void DebugVisitor::visit(ImportDeclaration* node) {
-    std::cout << "import " << node->path << "\n";
-}
-
 void DebugVisitor::visit(FunctionDeclaration* node) {
     std::cout << "func " << node->name << " " << node->type->toString();
-}
-
-void DebugVisitor::visit(ExternFunctionDeclaration* node) {
-    std::cout << "extern func " << node->name << " " << node->type->toString();
 }
 
 void DebugVisitor::visit(FunctionDefinition* node) {
@@ -240,25 +235,9 @@ void DebugVisitor::visit(FunctionDefinition* node) {
     node->content_stmt->accept(this);
 }
 
-void DebugVisitor::visit(TranslationUnit* node) {
-    std::cout << ">>> translation unit";
-    for (auto& decl : node->imports) {
-        decl->accept(this);
-    }
-
-    for (auto& decl : node->func_decls) {
-        decl->accept(this);
-        std::cout << "\n";
-    }
-}
-
 void DebugVisitor::visit(Module* node) {
-    for (auto& decl : node->imported_modules) {
-        decl->accept(this);
-    }
-
     std::cout << ">>> module " << node->name << "\n";
-    for (auto& decl : node->functions) {
+    for (auto& decl : node->declarations) {
         decl->accept(this);
         std::cout << "\n";
     }

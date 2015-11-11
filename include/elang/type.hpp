@@ -11,7 +11,7 @@ namespace elang {
 
 class Type {
   public:
-    enum class Variety { Builtin, Array, Pointer, Reference, Function };
+    enum class Variety { Builtin, Array, Pointer, LValue, Function };
 
     explicit Type(Variety var);
 
@@ -61,11 +61,11 @@ class PointerType : public Type {
     friend class TypeManager;
 };
 
-class ReferenceType : public Type {
-    ReferenceType(Type* subtype);
+class LValueType : public Type {
+    LValueType(Type* subtype);
 
   public:
-    virtual ~ReferenceType() = default;
+    virtual ~LValueType() = default;
     virtual std::string toString() const override;
 
     Type* subtype;
@@ -94,7 +94,7 @@ class TypeManager {
     BuiltinType _bool_ty;
     std::map<std::pair<Type*, std::size_t>, ArrayType*> _array_types;
     std::map<Type*, PointerType*> _ptr_types;
-    std::map<Type*, ReferenceType*> _ref_types;
+    std::map<Type*, LValueType*> _lval_types;
     std::map<std::pair<Type*, std::vector<Type*>>, FunctionType*> _func_types;
 
   public:
@@ -103,11 +103,12 @@ class TypeManager {
 
     BuiltinType* getVoidType();
     BuiltinType* getIntType();
+    BuiltinType* getDoubleType();
     BuiltinType* getCharType();
     BuiltinType* getBoolType();
     ArrayType* getArrayType(Type* subtype, std::size_t size);
     PointerType* getPointerType(Type* subtype);
-    ReferenceType* getReferenceType(Type* subtype);
+    LValueType* getLValueType(Type* subtype);
     FunctionType* getFunctionType(Type* ret_ty, std::vector<Type*> param_ty);
 };
 

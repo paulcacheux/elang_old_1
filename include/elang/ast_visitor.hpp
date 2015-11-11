@@ -26,11 +26,8 @@ class Visitor {
     virtual void visit(SelectionStatement* node) = 0;
     virtual void visit(IterationStatement* node) = 0;
     virtual void visit(ReturnStatement* node) = 0;
-    virtual void visit(ImportDeclaration* node) = 0;
     virtual void visit(FunctionDeclaration* node) = 0;
-    virtual void visit(ExternFunctionDeclaration* node) = 0;
     virtual void visit(FunctionDefinition* node) = 0;
-    virtual void visit(TranslationUnit* node) = 0;
     virtual void visit(Module* node) = 0;
 };
 

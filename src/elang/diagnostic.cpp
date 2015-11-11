@@ -1,15 +1,11 @@
-#include <elang/diagnoctic.hpp>
+#include <elang/diagnostic.hpp>
 
 #include <iostream>
 #include <ostream>
-#include <string>
 
 #include <elang/source_manager.hpp>
 
 namespace elang {
-
-const std::string red_color{"\033[31m"};
-const std::string normal_color{"\033[0m"};
 
 std::ostream& operator<<(std::ostream& out, ErrorLevel level) {
     switch (level) {
@@ -28,14 +24,14 @@ DiagnosticEngine::DiagnosticEngine(SourceManager* sm, unsigned limit)
 
 void DiagnosticEngine::report(ErrorLevel level, SourceLocation loc,
                               std::string message) {
-    ++_nerr;
     auto user_loc = _source_manager->getUserLocation(loc);
     std::cout << user_loc.file_name << ":" << user_loc.line << ":"
-              << user_loc.column << ": " << level << " " << red_color << message
-              << normal_color << "\n";
+              << user_loc.column << ": " << red_color << level << normal_color
+              << " " << message << "\n";
     std::cout << user_loc.line_string << "\n";
     std::cout << std::string(user_loc.column, ' ') << "^\n";
 
+    ++_nerr;
     if (level == ErrorLevel::FatalError || user_loc.is_eof) {
         std::exit(1);
     }
@@ -43,6 +39,10 @@ void DiagnosticEngine::report(ErrorLevel level, SourceLocation loc,
         std::cout << _limit << ": compilation aborted" << std::endl;
         std::exit(1);
     }
+}
+
+void DiagnosticEngine::report(SourceLocation loc, std::string message) {
+    report(ErrorLevel::Error, loc, message);
 }
 
 } // namespace elang

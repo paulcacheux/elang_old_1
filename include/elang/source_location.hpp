@@ -7,6 +7,7 @@ namespace elang {
 
 class SourceLocation {
   public:
+    SourceLocation() = delete;
     SourceLocation(unsigned fileid, std::size_t offset);
 
     unsigned fileid;
