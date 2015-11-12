@@ -1,3 +1,9 @@
-func main wtf () {
+mod io {
+    mod io {
 
+    }
+}
+
+func main () {
+    
 }

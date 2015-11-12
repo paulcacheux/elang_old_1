@@ -17,7 +17,8 @@ namespace ast {
 class SemaVisitor : public Visitor {
     TypeManager* _type_manager;
     DiagnosticEngine* _diag_engine;
-    SymbolTable _symbol_table;
+    std::unique_ptr<LocalTable> _local_table;
+    GlobalTable _global_table;
 
     Type* _current_return_ty;
 

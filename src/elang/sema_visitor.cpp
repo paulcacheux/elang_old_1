@@ -172,10 +172,20 @@ void SemaVisitor::visit(LValueToRValueCastExpression* node) {
 }
 
 void SemaVisitor::visit(IdentifierReference* node) {
-    auto ty = _symbol_table.getSymbol(node->module_path, node->name);
+    Type* ty = nullptr;
+    if (node->module_path.empty()) {
+        ty = _local_table->get(node->name);
+    }
+
     if (!ty) {
-        _diag_engine->report(ErrorLevel::FatalError, node->location,
-                             node->name + " is not defined");
+        ty = _global_table.get(node->module_path, node->name);
+    }
+
+    if (!ty) {
+        _diag_engine->report(node->location,
+                             node->name + " is not declared in this scope");
+        node->type = _type_manager->getIntType();
+        return;
     }
 
     if (ty->variety == Type::Variety::Function) {
@@ -206,18 +216,14 @@ void SemaVisitor::visit(BoolLiteral* node) {
 }
 
 void SemaVisitor::visit(CompoundStatement* node) {
-    _symbol_table.beginScope();
+    _local_table->beginScope();
     for (auto& stmt : node->stmts) {
         stmt->accept(this);
     }
+    _local_table->endScope();
 }
 
 void SemaVisitor::visit(LetStatement* node) {
-    if (!_symbol_table.canAddSymbol(node->name)) {
-        _diag_engine->report(node->location,
-                             node->name + " is already defined");
-        return;
-    }
 
     if (node->init_expr) {
         node->init_expr->accept(this);
@@ -230,7 +236,12 @@ void SemaVisitor::visit(LetStatement* node) {
             return;
         }
     }
-    _symbol_table.putSymbol(node->name, node->type);
+
+    if (!_local_table->put(node->name, node->type)) {
+        _diag_engine->report(node->location,
+                             node->name + " is already defined");
+        return;
+    }
 }
 
 void SemaVisitor::visit(ExpressionStatement* node) {
@@ -284,40 +295,57 @@ void SemaVisitor::visit(ReturnStatement* node) {
 }
 
 void SemaVisitor::visit(FunctionDeclaration* node) {
-    if (!_symbol_table.canAddGlobal(node->name)) {
+    auto current_state = _global_table.getStateInModule(node->name);
+    if (current_state.second == GlobalTable::State::Defined) {
         _diag_engine->report(node->location,
-                             node->name + " is already defined");
-        return;
+                             node->name + " is already defined in this module");
+    } else if (current_state.second == GlobalTable::State::Declared
+               && current_state.first != node->type) {
+        _diag_engine->report(node->location,
+                             node->name + " is declared with a different type");
+    } else {
+        _global_table.declare(node->name, node->type);
     }
-    _symbol_table.putGlobal(node->name, node->type);
 }
 
 void SemaVisitor::visit(FunctionDefinition* node) {
-    if (!_symbol_table.canAddGlobal(node->name)) {
+    auto current_state = _global_table.getStateInModule(node->name);
+    if (current_state.second == GlobalTable::State::Defined) {
         _diag_engine->report(node->location,
-                             node->name + " is already defined");
-        return;
-        // TODO: check with extern, if all function are defined etc...
+                             node->name + " is already defined in this module");
+    } else if (current_state.second == GlobalTable::State::Declared
+               && current_state.first != node->type) {
+        _diag_engine->report(node->location,
+                             node->name + " is declared with a different type");
+    } else {
+        _global_table.define(node->name, node->type);
+        _local_table = std::make_unique<LocalTable>();
+        for (std::size_t i = 0; i < node->param_names.size(); ++i) {
+            if (!_local_table->put(node->param_names[i],
+                                   node->type->params_types[i])) {
+                _diag_engine->report(
+                    node->location, node->param_names[i]
+                                        + " is already defined as a parameter");
+            }
+        }
+        _current_return_ty = node->type->return_type;
+        node->content_stmt->accept(this);
+        _local_table.reset();
     }
-    _symbol_table.putGlobal(node->name, node->type);
-    _symbol_table.beginScope();
-    for (std::size_t i = 0; i < node->param_names.size(); ++i) {
-        _symbol_table.putSymbol(node->param_names[i],
-                                node->type->params_types[i]);
-    }
-    _current_return_ty = node->type->return_type;
-    node->content_stmt->accept(this);
-    _symbol_table.endScope();
 }
 
 void SemaVisitor::visit(Module* node) {
-    _symbol_table.beginModule(node->name);
+    if (!_global_table.beginModule(node->name)) {
+        _diag_engine->report(node->location,
+                             node->name + " is already in module path");
+        return;
+    }
 
     for (auto& decl : node->declarations) {
         decl->accept(this);
     }
 
-    _symbol_table.endModule();
+    _global_table.endModule();
 }
 
 } // namespace ast

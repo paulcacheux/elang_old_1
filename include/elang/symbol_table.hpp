@@ -9,29 +9,43 @@
 
 namespace elang {
 
-class SymbolTable {
+class LocalTable {
     std::vector<std::map<std::string, Type*>> _scopes;
-    std::map<std::string, Type*> _globals;
-
-    std::vector<std::string> _current_module_path;
 
   public:
-    SymbolTable();
+    LocalTable();
+    ~LocalTable();
 
     void beginScope();
     void endScope();
 
-    void beginModule(const std::string& name);
+    Type* get(const std::string& name);
+    bool put(const std::string& name,
+             Type* ty); // return false if name is already defined IN LAST
+                        // SCOPE else return true
+};
+
+class GlobalTable {
+  public:
+    enum State { Defined, Declared, None };
+
+  private:
+    std::map<std::string, std::pair<Type*, State>> _globals;
+    std::vector<std::string> _current_module_path;
+
+  public:
+    GlobalTable() = default;
+
+    bool beginModule(const std::string& name); // return false if name is
+                                               // already in module path else
+                                               // return true
     void endModule();
 
-    Type* getSymbol(std::vector<std::string>& mod_path,
-                    const std::string& name);
+    Type* get(std::vector<std::string>& mod_path, const std::string& name);
+    std::pair<Type*, State> getStateInModule(const std::string& name);
 
-    void putSymbol(const std::string& name, Type* ty);
-    void putGlobal(const std::string& name, Type* ty);
-
-    bool canAddSymbol(const std::string& name); // in last scope
-    bool canAddGlobal(const std::string& name); // in current module
+    void declare(const std::string& name, Type* ty);
+    void define(const std::string& name, Type* ty);
 };
 
 } // namespace elang

@@ -10,34 +10,57 @@ inline std::string modulePathToString(const std::vector<std::string>& path) {
 
 namespace elang {
 
-SymbolTable::SymbolTable() {
+LocalTable::LocalTable() {
     _scopes.reserve(5);
+    beginScope();
 }
 
-void SymbolTable::beginScope() {
+LocalTable::~LocalTable() {
+    endScope();
+}
+
+void LocalTable::beginScope() {
     _scopes.emplace_back();
 }
 
-void SymbolTable::endScope() {
+void LocalTable::endScope() {
     _scopes.pop_back();
 }
 
-void SymbolTable::beginModule(const std::string& name) {
-    _current_module_path.push_back(name);
-}
-
-void SymbolTable::endModule() {
-    _current_module_path.pop_back();
-}
-
-Type* SymbolTable::getSymbol(std::vector<std::string>& mod_path,
-                             const std::string& name) {
+Type* LocalTable::get(const std::string& name) {
     for (auto it = _scopes.rbegin(); it != _scopes.rend(); ++it) {
         if (it->find(name) != it->end()) {
             return (*it)[name];
         }
     }
+    return nullptr;
+}
 
+bool LocalTable::put(const std::string& name, Type* ty) {
+    if (_scopes.back().find(name) != _scopes.back().end()) {
+        return false;
+    }
+
+    _scopes.back()[name] = ty;
+    return true;
+}
+
+bool GlobalTable::beginModule(const std::string& name) {
+    if (std::find(_current_module_path.begin(), _current_module_path.end(),
+                  name)
+        != _current_module_path.end()) {
+        return false;
+    }
+    _current_module_path.push_back(name);
+    return true;
+}
+
+void GlobalTable::endModule() {
+    _current_module_path.pop_back();
+}
+
+Type* GlobalTable::get(std::vector<std::string>& mod_path,
+                       const std::string& name) {
     auto added_module_path = _current_module_path;
     while (!added_module_path.empty()) {
         auto pathed_name = modulePathToString(added_module_path)
@@ -45,7 +68,7 @@ Type* SymbolTable::getSymbol(std::vector<std::string>& mod_path,
         if (_globals.find(pathed_name) != _globals.end()) {
             mod_path.insert(mod_path.begin(), added_module_path.begin(),
                             added_module_path.end());
-            return _globals[pathed_name];
+            return _globals[pathed_name].first;
         }
         added_module_path.pop_back();
     }
@@ -53,21 +76,23 @@ Type* SymbolTable::getSymbol(std::vector<std::string>& mod_path,
     return nullptr;
 }
 
-void SymbolTable::putSymbol(const std::string& name, Type* ty) {
-    _scopes.back()[name] = ty;
+std::pair<Type*, GlobalTable::State>
+GlobalTable::getStateInModule(const std::string& name) {
+    auto pathed_name = modulePathToString(_current_module_path) + name;
+    if (_globals.find(pathed_name) != _globals.end()) {
+        return _globals[pathed_name];
+    }
+    return std::make_pair<Type*, State>(nullptr, State::None);
 }
 
-void SymbolTable::putGlobal(const std::string& name, Type* ty) {
-    _globals[modulePathToString(_current_module_path) + name] = ty;
+void GlobalTable::declare(const std::string& name, Type* ty) {
+    _globals[modulePathToString(_current_module_path) + name]
+        = std::make_pair(ty, State::Declared);
 }
 
-bool SymbolTable::canAddSymbol(const std::string& name) {
-    return _scopes.back().find(name) == _scopes.back().end();
-}
-
-bool SymbolTable::canAddGlobal(const std::string& name) {
-    return _globals.find(modulePathToString(_current_module_path) + name)
-           == _globals.end();
+void GlobalTable::define(const std::string& name, Type* ty) {
+    _globals[modulePathToString(_current_module_path) + name]
+        = std::make_pair(ty, State::Defined);
 }
 
 } // namespace elang
