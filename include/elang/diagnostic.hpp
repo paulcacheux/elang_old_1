@@ -2,12 +2,11 @@
 #define ELANG_DIAGNOSTIC_H
 
 #include <string>
+#include <vector>
 
 #include <elang/source_location.hpp>
 
 namespace elang {
-
-enum class ErrorLevel { Warning, FatalError, Error };
 
 class SourceManager;
 
@@ -21,8 +20,14 @@ class DiagnosticEngine {
   public:
     DiagnosticEngine(SourceManager* sm, unsigned limit = 5);
 
-    void report(ErrorLevel level, SourceLocation loc, std::string message);
-    void report(SourceLocation loc, std::string message);
+    void report(SourceLocation loc, unsigned error_index,
+                std::initializer_list<std::string> params = {});
+
+  private:
+    std::string getMessage(unsigned error_index);
+    std::vector<std::string> splitMessage(std::string msg);
+    std::string formatMessage(unsigned error_index,
+                              std::initializer_list<std::string> params);
 };
 
 } // namespace elang

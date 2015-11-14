@@ -1,1 +1,41 @@
-// MSG(index, "python like formating")
+#ifndef MSG
+#define MSG(index, msg)
+#endif
+
+// index => 1XXX for lexer, 2XXX for parser, 3XXX for sema, 0XXX for IO or other
+
+MSG(0, "Compiler error, please report")
+
+MSG(1001, "Unexpected char `@`")
+MSG(1002, "Unclosed string literal")
+MSG(1003, "Unclosed character literal")
+MSG(1004, "Unexpected escape character `@`")
+
+MSG(2001, "Unexpected token `@`")
+MSG(2002, "Can\'t initialize `@` without an initializer or a type")
+
+MSG(3001, "Assignment to an RValue")
+MSG(3002, "Mismatching type in assignment (given: @, expected: @)")
+MSG(3003, "Mismatching type in comparison")
+MSG(3004, "Mismatching type in arithmetic")
+MSG(3005, "Logical operation on non bools operands")
+MSG(3006, "Unary sign operator on a non arithmetic type")
+MSG(3007, "Unary logical not on a non bool type")
+MSG(3008, "Dereferencing a non pointer type")
+MSG(3009, "Address of on an non RValue type")
+MSG(3010, "Subscript index is not an int")
+MSG(3011, "`@` is not subscriptable")
+MSG(3012, "`@` is not a function")
+MSG(3013, "Mismatching parameters")
+MSG(3014, "`@` is not declared in this scope")
+MSG(3015, "Initializer expression for `@` does not match (given: @, expected: @)")
+MSG(3016, "`@` is already defined in current scope")
+MSG(3017, "`@` is already defined as a parameter of this function")
+MSG(3018, "`@` is already defined in current module")
+MSG(3019, "`@` is already declared with a different type")
+MSG(3020, "`@` is already in module path")
+MSG(3021, "Selection condition must be of bool type")
+MSG(3022, "Iteration condition must be of bool type")
+MSG(3023, "Return type mismatching with function declaration (given: @, expected: @)")
+
+#undef MSG

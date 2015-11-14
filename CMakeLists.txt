@@ -2,6 +2,7 @@ cmake_minimum_required (VERSION 2.8)
 project(elang)
 
 set(CMAKE_CXX_FLAGS "-Wall -Werror -Wno-c++98-compat -std=c++1y -O1") 
+set(CMAKE_CXX_FLAGS "-Wall -Werror -Wno-c++98-compat -fsanitize=address -g -std=c++1y -O0") 
 
 file(
     GLOB_RECURSE

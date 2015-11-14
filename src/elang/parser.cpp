@@ -26,7 +26,8 @@ std::unique_ptr<ast::Declaration> Parser::parseDeclaration() {
     } else if (_lexer->peekToken().is(Token::Kind::kw_func)) {
         return std::move(parseFunctionDeclaration());
     } else {
-        _diag_engine->report(_lexer->getToken().location, "Unexpected token");
+        auto tok = _lexer->getToken();
+        _diag_engine->report(tok.location, 2001, {tok.value});
         return parseDeclaration();
     }
 }
@@ -97,9 +98,10 @@ BuiltinType* Parser::parseBuiltinType() {
         return _type_manager->getBoolType();
     } else if (tok.is(Token::Kind::kw_char)) {
         return _type_manager->getCharType();
+    } else if (tok.is(Token::Kind::kw_double)) {
+        return _type_manager->getDoubleType();
     } else {
-        _diag_engine->report(tok.location, "Unexpected token");
-
+        _diag_engine->report(tok.location, 2001, {tok.value});
         return parseBuiltinType();
     }
 }
@@ -162,8 +164,7 @@ std::unique_ptr<ast::LetStatement> Parser::parseLetStatement() {
     } else if (tok.is(Token::Kind::equal)) {
         init_expr = parseExpression();
     } else {
-        _diag_engine->report(ErrorLevel::FatalError, loc,
-                             "you must provide an initializer or a type");
+        _diag_engine->report(loc, 2002, {tok.value});
     }
 
     expect(Token::Kind::semi);
@@ -467,14 +468,16 @@ std::vector<std::unique_ptr<ast::Expression>> Parser::parseArgs() {
 
 void Parser::expect(Token::Kind kind) {
     while (!_lexer->peekToken().isOneOf(kind, Token::Kind::eof)) {
-        _diag_engine->report(_lexer->getToken().location, "Unexpected token");
+        auto tok = _lexer->getToken();
+        _diag_engine->report(tok.location, 2001, {tok.value});
     }
     _lexer->getToken();
 }
 
 Token Parser::accept(Token::Kind kind) {
     while (!_lexer->peekToken().isOneOf(kind, Token::Kind::eof)) {
-        _diag_engine->report(_lexer->getToken().location, "Unexpected token");
+        auto tok = _lexer->getToken();
+        _diag_engine->report(tok.location, 2001, {tok.value});
     }
     return _lexer->getToken();
 }

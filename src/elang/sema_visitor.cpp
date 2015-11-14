@@ -18,15 +18,16 @@ void SemaVisitor::visit(BinaryOperator* node) {
         node->lhs->accept(this);
         node->rhs->accept(this);
         if (node->lhs->type->variety != Type::Variety::LValue) {
-            _diag_engine->report(node->location, "assign to a rvalue");
+            _diag_engine->report(node->location, 3001);
             node->type = node->lhs->type;
             return;
         }
         auto lhs_ty = static_cast<LValueType*>(node->lhs->type)->subtype;
         node->rhs = addL2RCast(std::move(node->rhs));
         if (lhs_ty != node->rhs->type) {
-            _diag_engine->report(node->location,
-                                 "mismtaching type in assignment");
+            _diag_engine->report(
+                node->location, 3002,
+                {lhs_ty->toString(), node->rhs->type->toString()});
         }
         node->type = lhs_ty;
     } else if (node->kind == BinaryOperator::Kind::LessOrEqual
@@ -39,8 +40,7 @@ void SemaVisitor::visit(BinaryOperator* node) {
         node->rhs = addL2RCast(std::move(node->rhs));
 
         if (node->lhs->type != node->rhs->type) {
-            _diag_engine->report(node->location,
-                                 "mismatching type in comparison");
+            _diag_engine->report(node->location, 3003);
         }
         node->type = _type_manager->getBoolType();
     } else if (node->kind == BinaryOperator::Kind::Add
@@ -52,8 +52,7 @@ void SemaVisitor::visit(BinaryOperator* node) {
         node->rhs = addL2RCast(std::move(node->rhs));
 
         if (node->lhs->type != node->rhs->type) {
-            _diag_engine->report(node->location,
-                                 "mismatching type in arithmetic");
+            _diag_engine->report(node->location, 3004);
         }
         node->type = node->lhs->type;
     } else if (node->kind == BinaryOperator::Kind::LogicalAnd
@@ -63,8 +62,7 @@ void SemaVisitor::visit(BinaryOperator* node) {
 
         auto bool_ty = _type_manager->getBoolType();
         if (node->lhs->type != bool_ty || node->rhs->type != bool_ty) {
-            _diag_engine->report(node->location,
-                                 "logical and/or without bools");
+            _diag_engine->report(node->location, 3005);
         }
         node->type = bool_ty;
     }
@@ -77,23 +75,19 @@ void SemaVisitor::visit(UnaryOperator* node) {
         node->expr = addL2RCast(std::move(node->expr));
         if (node->expr->type != _type_manager->getIntType()
             || node->expr->type != _type_manager->getDoubleType()) {
-            _diag_engine->report(
-                node->location, "sign unary operator on a non arithmetic type");
+            _diag_engine->report(node->location, 3006);
         }
         node->type = node->expr->type;
     } else if (node->kind == UnaryOperator::Kind::LogicalNot) {
         node->expr = addL2RCast(std::move(node->expr));
         if (node->expr->type != _type_manager->getBoolType()) {
-            _diag_engine->report(
-                node->location,
-                "logical not unary operator on a non bool type");
+            _diag_engine->report(node->location, 3007);
         }
         node->type = node->expr->type;
     } else if (node->kind == UnaryOperator::Kind::PtrDeref) {
         node->expr = addL2RCast(std::move(node->expr));
         if (node->expr->type->variety != Type::Variety::Pointer) {
-            _diag_engine->report(node->location,
-                                 "dereferencing on a non pointer type");
+            _diag_engine->report(node->location, 3008);
             node->type = node->expr->type;
             return;
         }
@@ -101,7 +95,7 @@ void SemaVisitor::visit(UnaryOperator* node) {
         node->type = _type_manager->getLValueType(ptr_subty);
     } else if (node->kind == UnaryOperator::Kind::AddressOf) {
         if (node->expr->type->variety != Type::Variety::LValue) {
-            _diag_engine->report(node->location, "error adressof");
+            _diag_engine->report(node->location, 3009);
             node->type = node->expr->type;
             return;
         }
@@ -117,8 +111,7 @@ void SemaVisitor::visit(SubscriptExpression* node) {
     node->index = addL2RCast(std::move(node->index));
 
     if (node->index->type != _type_manager->getIntType()) {
-        _diag_engine->report(ErrorLevel::FatalError, node->index->location,
-                             "index is not an int");
+        _diag_engine->report(node->index->location, 3010);
     }
 
     if (node->subscripted->type->variety == Type::Variety::Pointer) {
@@ -128,8 +121,8 @@ void SemaVisitor::visit(SubscriptExpression* node) {
         node->type = _type_manager->getLValueType(
             static_cast<ArrayType*>(node->subscripted->type)->subtype);
     } else {
-        _diag_engine->report(node->subscripted->location,
-                             "unsubscriptable type");
+        _diag_engine->report(node->subscripted->location, 3011,
+                             {node->subscripted->type->toString()});
         node->type = node->subscripted->type;
     }
 }
@@ -137,8 +130,10 @@ void SemaVisitor::visit(SubscriptExpression* node) {
 void SemaVisitor::visit(CallExpression* node) {
     node->func->accept(this);
     if (node->func->type->variety != Type::Variety::Function) {
-        _diag_engine->report(ErrorLevel::FatalError, node->location,
-                             node->func->name + " is not a function");
+        _diag_engine->report(node->location, 3012,
+                             {node->func->type->toString()});
+        node->type = _type_manager->getIntType();
+        return;
     }
     auto func_ty = static_cast<FunctionType*>(node->func->type);
 
@@ -150,8 +145,9 @@ void SemaVisitor::visit(CallExpression* node) {
         args_ty.push_back(arg->type);
     }
     if (args_ty != func_ty->params_types) {
-        _diag_engine->report(ErrorLevel::FatalError, node->location,
-                             "mismatching parameters");
+        _diag_engine->report(node->location, 3013);
+        node->type = _type_manager->getIntType();
+        return;
     }
     node->type = func_ty->return_type;
 }
@@ -165,8 +161,8 @@ void SemaVisitor::visit(LValueToRValueCastExpression* node) {
     node->lvalue->accept(this);
     auto ty = node->lvalue->type;
     if (ty->variety != Type::Variety::LValue) {
-        _diag_engine->report(ErrorLevel::FatalError, node->location,
-                             "compiler error: l2r no lvalue");
+        _diag_engine->report(node->location, 0);
+        std::exit(-1);
     }
     node->type = static_cast<LValueType*>(ty)->subtype;
 }
@@ -182,8 +178,7 @@ void SemaVisitor::visit(IdentifierReference* node) {
     }
 
     if (!ty) {
-        _diag_engine->report(node->location,
-                             node->name + " is not declared in this scope");
+        _diag_engine->report(node->location, 3014, {node->name});
         node->type = _type_manager->getIntType();
         return;
     }
@@ -231,15 +226,15 @@ void SemaVisitor::visit(LetStatement* node) {
         if (!node->type) {
             node->type = node->init_expr->type;
         } else if (node->init_expr->type != node->type) {
-            _diag_engine->report(node->location,
-                                 "initializer expression type mismatching");
+            _diag_engine->report(node->location, 3015,
+                                 {node->name, node->init_expr->type->toString(),
+                                  node->type->toString()});
             return;
         }
     }
 
     if (!_local_table->put(node->name, node->type)) {
-        _diag_engine->report(node->location,
-                             node->name + " is already defined");
+        _diag_engine->report(node->location, 3016, {node->name});
         return;
     }
 }
@@ -255,9 +250,7 @@ void SemaVisitor::visit(SelectionStatement* node) {
         choice.first->accept(this);
         choice.first = addL2RCast(std::move(choice.first));
         if (choice.first->type != _type_manager->getBoolType()) {
-            _diag_engine->report(
-                node->location,
-                "condition expression type mismatching (expected bool)");
+            _diag_engine->report(node->location, 3021);
         }
         choice.second->accept(this);
     }
@@ -270,9 +263,7 @@ void SemaVisitor::visit(IterationStatement* node) {
     node->condition->accept(this);
     node->condition = addL2RCast(std::move(node->condition));
     if (node->condition->type != _type_manager->getBoolType()) {
-        _diag_engine->report(
-            node->location,
-            "condition expression type mismatching (expected bool)");
+        _diag_engine->report(node->location, 3022);
     }
     node->stmt->accept(this);
 }
@@ -282,27 +273,26 @@ void SemaVisitor::visit(ReturnStatement* node) {
         node->expr->accept(this);
         node->expr = addL2RCast(std::move(node->expr));
         if (node->expr->type != _current_return_ty) {
-            _diag_engine->report(node->location,
-                                 "return type mismatching (expected "
-                                     + _current_return_ty->toString() + ")");
+            _diag_engine->report(
+                node->location, 3023,
+                {node->expr->type->toString(), _current_return_ty->toString()});
         }
     } else {
-        if (_current_return_ty != _type_manager->getVoidType())
-            _diag_engine->report(node->location,
-                                 "return type mismatching (expected "
-                                     + _current_return_ty->toString() + ")");
+        if (_current_return_ty != _type_manager->getVoidType()) {
+            _diag_engine->report(node->location, 3023,
+                                 {_type_manager->getVoidType()->toString(),
+                                  _current_return_ty->toString()});
+        }
     }
 }
 
 void SemaVisitor::visit(FunctionDeclaration* node) {
     auto current_state = _global_table.getStateInModule(node->name);
     if (current_state.second == GlobalTable::State::Defined) {
-        _diag_engine->report(node->location,
-                             node->name + " is already defined in this module");
+        _diag_engine->report(node->location, 3018, {node->name});
     } else if (current_state.second == GlobalTable::State::Declared
                && current_state.first != node->type) {
-        _diag_engine->report(node->location,
-                             node->name + " is declared with a different type");
+        _diag_engine->report(node->location, 3019, {node->name});
     } else {
         _global_table.declare(node->name, node->type);
     }
@@ -311,21 +301,18 @@ void SemaVisitor::visit(FunctionDeclaration* node) {
 void SemaVisitor::visit(FunctionDefinition* node) {
     auto current_state = _global_table.getStateInModule(node->name);
     if (current_state.second == GlobalTable::State::Defined) {
-        _diag_engine->report(node->location,
-                             node->name + " is already defined in this module");
+        _diag_engine->report(node->location, 3018, {node->name});
     } else if (current_state.second == GlobalTable::State::Declared
                && current_state.first != node->type) {
-        _diag_engine->report(node->location,
-                             node->name + " is declared with a different type");
+        _diag_engine->report(node->location, 3019, {node->name});
     } else {
         _global_table.define(node->name, node->type);
         _local_table = std::make_unique<LocalTable>();
         for (std::size_t i = 0; i < node->param_names.size(); ++i) {
             if (!_local_table->put(node->param_names[i],
                                    node->type->params_types[i])) {
-                _diag_engine->report(
-                    node->location, node->param_names[i]
-                                        + " is already defined as a parameter");
+                _diag_engine->report(node->location, 3017,
+                                     {node->param_names[i]});
             }
         }
         _current_return_ty = node->type->return_type;
@@ -336,8 +323,7 @@ void SemaVisitor::visit(FunctionDefinition* node) {
 
 void SemaVisitor::visit(Module* node) {
     if (!_global_table.beginModule(node->name)) {
-        _diag_engine->report(node->location,
-                             node->name + " is already in module path");
+        _diag_engine->report(node->location, 3020, {node->name});
         return;
     }
 

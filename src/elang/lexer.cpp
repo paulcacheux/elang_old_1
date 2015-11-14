@@ -101,13 +101,13 @@ Token Lexer::getToken() {
             token_location};
     } else if (current == '|') {
         return Token{
-            twoCharTokenKind('&', Token::Kind::pipe, Token::Kind::pipepipe),
+            twoCharTokenKind('|', Token::Kind::pipe, Token::Kind::pipepipe),
             token_location};
     } else if (current == '\"') {
         std::string literal_string;
         while (_reader.peek() != '\"') {
             if (_reader.peek() == std::char_traits<char>::eof()) {
-                _diag_engine->report(token_location, "Unclosed string literal");
+                _diag_engine->report(token_location, 1002);
             }
             literal_string.push_back(readLiteralChar());
         }
@@ -118,7 +118,7 @@ Token Lexer::getToken() {
         std::string literal_char;
         literal_char.push_back(readLiteralChar());
         if (_reader.get() != '\'') {
-            _diag_engine->report(token_location, "Unclosed char literal");
+            _diag_engine->report(token_location, 1003);
         }
         return Token{Token::Kind::char_literal, token_location, literal_char};
     } else if (current == '#') {
@@ -131,8 +131,8 @@ Token Lexer::getToken() {
         _reader.unget();
         return makeIntegerOrDoubleLiteralToken();
     } else {
-        _diag_engine->report(ErrorLevel::FatalError, token_location,
-                             std::string{"Unexpeted char "} += current);
+        _diag_engine->report(token_location, 1001,
+                             {std::string{1, static_cast<char>(current)}});
         return getToken();
     }
 }
@@ -174,7 +174,8 @@ std::string Lexer::readNumber() {
 char Lexer::readLiteralChar() {
     char c = _reader.get();
     if (c == '\\') {
-        switch (_reader.get()) {
+        auto escape = _reader.get();
+        switch (escape) {
         case 'a':
             c = '\a';
             break;
@@ -209,8 +210,8 @@ char Lexer::readLiteralChar() {
             c = '\\';
             break;
         default:
-            _diag_engine->report(_reader.getCurrentLocation(),
-                                 "Wrong escaped char");
+            _diag_engine->report(_reader.getCurrentLocation(), 1004,
+                                 {std::string{1, static_cast<char>(escape)}});
         }
     }
     return c;
