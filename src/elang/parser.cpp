@@ -27,7 +27,7 @@ std::unique_ptr<ast::Declaration> Parser::parseDeclaration() {
         return std::move(parseFunctionDeclaration());
     } else {
         auto tok = _lexer->getToken();
-        _diag_engine->report(tok.location, 2001, {tok.value});
+        _diag_engine->report(tok.location, 2001, tok.value);
         return parseDeclaration();
     }
 }
@@ -101,7 +101,7 @@ BuiltinType* Parser::parseBuiltinType() {
     } else if (tok.is(Token::Kind::kw_double)) {
         return _type_manager->getDoubleType();
     } else {
-        _diag_engine->report(tok.location, 2001, {tok.value});
+        _diag_engine->report(tok.location, 2001, tok.value);
         return parseBuiltinType();
     }
 }
@@ -164,7 +164,7 @@ std::unique_ptr<ast::LetStatement> Parser::parseLetStatement() {
     } else if (tok.is(Token::Kind::equal)) {
         init_expr = parseExpression();
     } else {
-        _diag_engine->report(loc, 2002, {tok.value});
+        _diag_engine->report(loc, 2002, tok.value);
     }
 
     expect(Token::Kind::semi);
@@ -469,7 +469,7 @@ std::vector<std::unique_ptr<ast::Expression>> Parser::parseArgs() {
 void Parser::expect(Token::Kind kind) {
     while (!_lexer->peekToken().isOneOf(kind, Token::Kind::eof)) {
         auto tok = _lexer->getToken();
-        _diag_engine->report(tok.location, 2001, {tok.value});
+        _diag_engine->report(tok.location, 2001, tok.value);
     }
     _lexer->getToken();
 }
@@ -477,7 +477,7 @@ void Parser::expect(Token::Kind kind) {
 Token Parser::accept(Token::Kind kind) {
     while (!_lexer->peekToken().isOneOf(kind, Token::Kind::eof)) {
         auto tok = _lexer->getToken();
-        _diag_engine->report(tok.location, 2001, {tok.value});
+        _diag_engine->report(tok.location, 2001, tok.value);
     }
     return _lexer->getToken();
 }

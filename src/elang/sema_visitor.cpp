@@ -15,8 +15,6 @@ void SemaVisitor::visit(BinaryOperator* node) {
     node->lhs->accept(this);
     node->rhs->accept(this);
     if (node->kind == BinaryOperator::Kind::Assign) {
-        node->lhs->accept(this);
-        node->rhs->accept(this);
         if (node->lhs->type->variety != Type::Variety::LValue) {
             _diag_engine->report(node->location, 3001);
             node->type = node->lhs->type;
@@ -25,9 +23,8 @@ void SemaVisitor::visit(BinaryOperator* node) {
         auto lhs_ty = static_cast<LValueType*>(node->lhs->type)->subtype;
         node->rhs = addL2RCast(std::move(node->rhs));
         if (lhs_ty != node->rhs->type) {
-            _diag_engine->report(
-                node->location, 3002,
-                {lhs_ty->toString(), node->rhs->type->toString()});
+            _diag_engine->report(node->location, 3002, lhs_ty->toString(),
+                                 node->rhs->type->toString());
         }
         node->type = lhs_ty;
     } else if (node->kind == BinaryOperator::Kind::LessOrEqual
@@ -122,7 +119,7 @@ void SemaVisitor::visit(SubscriptExpression* node) {
             static_cast<ArrayType*>(node->subscripted->type)->subtype);
     } else {
         _diag_engine->report(node->subscripted->location, 3011,
-                             {node->subscripted->type->toString()});
+                             node->subscripted->type->toString());
         node->type = node->subscripted->type;
     }
 }
@@ -131,7 +128,7 @@ void SemaVisitor::visit(CallExpression* node) {
     node->func->accept(this);
     if (node->func->type->variety != Type::Variety::Function) {
         _diag_engine->report(node->location, 3012,
-                             {node->func->type->toString()});
+                             node->func->type->toString());
         node->type = _type_manager->getIntType();
         return;
     }
@@ -178,7 +175,7 @@ void SemaVisitor::visit(IdentifierReference* node) {
     }
 
     if (!ty) {
-        _diag_engine->report(node->location, 3014, {node->name});
+        _diag_engine->report(node->location, 3014, node->name);
         node->type = _type_manager->getIntType();
         return;
     }
@@ -226,15 +223,15 @@ void SemaVisitor::visit(LetStatement* node) {
         if (!node->type) {
             node->type = node->init_expr->type;
         } else if (node->init_expr->type != node->type) {
-            _diag_engine->report(node->location, 3015,
-                                 {node->name, node->init_expr->type->toString(),
-                                  node->type->toString()});
+            _diag_engine->report(node->location, 3015, node->name,
+                                 node->init_expr->type->toString(),
+                                 node->type->toString());
             return;
         }
     }
 
     if (!_local_table->put(node->name, node->type)) {
-        _diag_engine->report(node->location, 3016, {node->name});
+        _diag_engine->report(node->location, 3016, node->name);
         return;
     }
 }
@@ -273,15 +270,15 @@ void SemaVisitor::visit(ReturnStatement* node) {
         node->expr->accept(this);
         node->expr = addL2RCast(std::move(node->expr));
         if (node->expr->type != _current_return_ty) {
-            _diag_engine->report(
-                node->location, 3023,
-                {node->expr->type->toString(), _current_return_ty->toString()});
+            _diag_engine->report(node->location, 3023,
+                                 node->expr->type->toString(),
+                                 _current_return_ty->toString());
         }
     } else {
         if (_current_return_ty != _type_manager->getVoidType()) {
             _diag_engine->report(node->location, 3023,
-                                 {_type_manager->getVoidType()->toString(),
-                                  _current_return_ty->toString()});
+                                 _type_manager->getVoidType()->toString(),
+                                 _current_return_ty->toString());
         }
     }
 }
@@ -289,10 +286,10 @@ void SemaVisitor::visit(ReturnStatement* node) {
 void SemaVisitor::visit(FunctionDeclaration* node) {
     auto current_state = _global_table.getStateInModule(node->name);
     if (current_state.second == GlobalTable::State::Defined) {
-        _diag_engine->report(node->location, 3018, {node->name});
+        _diag_engine->report(node->location, 3018, node->name);
     } else if (current_state.second == GlobalTable::State::Declared
                && current_state.first != node->type) {
-        _diag_engine->report(node->location, 3019, {node->name});
+        _diag_engine->report(node->location, 3019, node->name);
     } else {
         _global_table.declare(node->name, node->type);
     }
@@ -301,10 +298,10 @@ void SemaVisitor::visit(FunctionDeclaration* node) {
 void SemaVisitor::visit(FunctionDefinition* node) {
     auto current_state = _global_table.getStateInModule(node->name);
     if (current_state.second == GlobalTable::State::Defined) {
-        _diag_engine->report(node->location, 3018, {node->name});
+        _diag_engine->report(node->location, 3018, node->name);
     } else if (current_state.second == GlobalTable::State::Declared
                && current_state.first != node->type) {
-        _diag_engine->report(node->location, 3019, {node->name});
+        _diag_engine->report(node->location, 3019, node->name);
     } else {
         _global_table.define(node->name, node->type);
         _local_table = std::make_unique<LocalTable>();
@@ -312,7 +309,7 @@ void SemaVisitor::visit(FunctionDefinition* node) {
             if (!_local_table->put(node->param_names[i],
                                    node->type->params_types[i])) {
                 _diag_engine->report(node->location, 3017,
-                                     {node->param_names[i]});
+                                     node->param_names[i]);
             }
         }
         _current_return_ty = node->type->return_type;
@@ -323,7 +320,7 @@ void SemaVisitor::visit(FunctionDefinition* node) {
 
 void SemaVisitor::visit(Module* node) {
     if (!_global_table.beginModule(node->name)) {
-        _diag_engine->report(node->location, 3020, {node->name});
+        _diag_engine->report(node->location, 3020, node->name);
         return;
     }
 

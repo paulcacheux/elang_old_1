@@ -20,14 +20,14 @@ class DiagnosticEngine {
   public:
     DiagnosticEngine(SourceManager* sm, unsigned limit = 5);
 
-    void report(SourceLocation loc, unsigned error_index,
-                std::initializer_list<std::string> params = {});
+    template <class... Ts>
+    void report(SourceLocation loc, unsigned error_index, Ts... params) {
+        return report(loc, error_index, {params...});
+    }
 
   private:
-    std::string getMessage(unsigned error_index);
-    std::vector<std::string> splitMessage(std::string msg);
-    std::string formatMessage(unsigned error_index,
-                              std::initializer_list<std::string> params);
+    void report(SourceLocation loc, unsigned error_index,
+                std::initializer_list<std::string> params);
 };
 
 } // namespace elang

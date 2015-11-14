@@ -6,6 +6,11 @@
 
 #include <elang/source_manager.hpp>
 
+std::string getMessage(unsigned error_index);
+std::vector<std::string> splitMessage(std::string msg);
+std::string buildMessage(unsigned error_index,
+                         std::initializer_list<std::string> params);
+
 namespace elang {
 
 DiagnosticEngine::DiagnosticEngine(SourceManager* sm, unsigned limit)
@@ -14,7 +19,7 @@ DiagnosticEngine::DiagnosticEngine(SourceManager* sm, unsigned limit)
 
 void DiagnosticEngine::report(SourceLocation loc, unsigned error_index,
                               std::initializer_list<std::string> params) {
-    auto message = formatMessage(error_index, params);
+    auto message = buildMessage(error_index, params);
     auto user_loc = _source_manager->getUserLocation(loc);
     std::cout << user_loc.file_name << ":" << user_loc.line << ":"
               << user_loc.column << ": " << red_color
@@ -32,18 +37,20 @@ void DiagnosticEngine::report(SourceLocation loc, unsigned error_index,
     }
 }
 
-std::string DiagnosticEngine::getMessage(unsigned error_index) {
+} // namespace elang
+
+std::string getMessage(unsigned error_index) {
     switch (error_index) {
 #define MSG(index, msg)                                                        \
     case index:                                                                \
         return msg;
-#include <elang/diagnostic_messages.def>
+#include <elang/error_messages.def>
     default:
         return getMessage(0);
     }
 }
 
-std::vector<std::string> DiagnosticEngine::splitMessage(std::string msg) {
+std::vector<std::string> splitMessage(std::string msg) {
     std::vector<std::string> parts;
     std::string current;
     for (auto& c : msg) {
@@ -60,9 +67,8 @@ std::vector<std::string> DiagnosticEngine::splitMessage(std::string msg) {
     return parts;
 }
 
-std::string
-DiagnosticEngine::formatMessage(unsigned error_index,
-                                std::initializer_list<std::string> params) {
+std::string buildMessage(unsigned error_index,
+                         std::initializer_list<std::string> params) {
     auto template_message = getMessage(error_index);
     auto split_msg = splitMessage(template_message);
     assert(split_msg.size() - 1 == params.size());
@@ -74,5 +80,3 @@ DiagnosticEngine::formatMessage(unsigned error_index,
     }
     return final_message;
 }
-
-} // namespace elang

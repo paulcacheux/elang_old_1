@@ -132,7 +132,7 @@ Token Lexer::getToken() {
         return makeIntegerOrDoubleLiteralToken();
     } else {
         _diag_engine->report(token_location, 1001,
-                             {std::string{1, static_cast<char>(current)}});
+                             std::string{1, static_cast<char>(current)});
         return getToken();
     }
 }
@@ -211,7 +211,7 @@ char Lexer::readLiteralChar() {
             break;
         default:
             _diag_engine->report(_reader.getCurrentLocation(), 1004,
-                                 {std::string{1, static_cast<char>(escape)}});
+                                 std::string{1, static_cast<char>(escape)});
         }
     }
     return c;
