@@ -1,14 +1,19 @@
 #include <elang/sema_visitor.hpp>
 
-std::unique_ptr<elang::ast::Expression>
-addL2RCast(std::unique_ptr<elang::ast::Expression>&& expr);
+#include <elang/source_manager.hpp>
+#include <elang/type.hpp>
+#include <elang/diagnostic.hpp>
 
 namespace elang {
+
+std::unique_ptr<ast::Expression>
+addL2RCast(std::unique_ptr<ast::Expression>&& expr);
+
 namespace ast {
 
 SemaVisitor::SemaVisitor(SourceManager* sm)
     : _type_manager(sm->getTypeManager()),
-      _diag_engine(sm->getDiagnosticEngine()) {
+      _diag_engine(sm->getDiagnosticEngine()), _op_inferer(_type_manager) {
 }
 
 void SemaVisitor::visit(BinaryOperator* node) {
@@ -27,70 +32,78 @@ void SemaVisitor::visit(BinaryOperator* node) {
                                  node->rhs->type->toString());
         }
         node->type = lhs_ty;
-    } else if (node->kind == BinaryOperator::Kind::LessOrEqual
-               || node->kind == BinaryOperator::Kind::Less
-               || node->kind == BinaryOperator::Kind::GreaterOrEqual
-               || node->kind == BinaryOperator::Kind::Greater
-               || node->kind == BinaryOperator::Kind::Equal
-               || node->kind == BinaryOperator::Kind::Different) {
+    } else {
         node->lhs = addL2RCast(std::move(node->lhs));
         node->rhs = addL2RCast(std::move(node->rhs));
-
-        if (node->lhs->type != node->rhs->type) {
-            _diag_engine->report(node->location, 3003);
+        if (node->kind == BinaryOperator::Kind::LessOrEqual
+            || node->kind == BinaryOperator::Kind::Less
+            || node->kind == BinaryOperator::Kind::GreaterOrEqual
+            || node->kind == BinaryOperator::Kind::Greater) {
+            node->type
+                = _op_inferer.inferBinaryComp(node->lhs->type, node->rhs->type);
+            if (!node->type) {
+                _diag_engine->report(node->location, 3003,
+                                     node->lhs->type->toString(),
+                                     node->rhs->type->toString());
+                node->type = _type_manager->getBoolType();
+            }
+        } else if (node->kind == BinaryOperator::Kind::Equal
+                   || node->kind == BinaryOperator::Kind::Different) {
+            node->type = _op_inferer.inferBinaryEqualOrDifferent(
+                node->lhs->type, node->rhs->type);
+            if (!node->type) {
+                _diag_engine->report(node->location, 3003,
+                                     node->lhs->type->toString(),
+                                     node->rhs->type->toString());
+                node->type = _type_manager->getBoolType();
+            }
+        } else if (node->kind == BinaryOperator::Kind::Add
+                   || node->kind == BinaryOperator::Kind::Minus) {
+            node->type = _op_inferer.inferBinaryAddOrMinus(node->lhs->type,
+                                                           node->rhs->type);
+            if (!node->type) {
+                _diag_engine->report(node->location, 3004,
+                                     node->lhs->type->toString(),
+                                     node->rhs->type->toString());
+                node->type = node->lhs->type;
+            }
+        } else if (node->kind == BinaryOperator::Kind::Times
+                   || node->kind == BinaryOperator::Kind::Divide
+                   || node->kind == BinaryOperator::Kind::Modulo) {
+            node->type = _op_inferer.inferBinaryTimesOrDivide(node->lhs->type,
+                                                              node->rhs->type);
+            if (!node->type) {
+                _diag_engine->report(node->location, 3004,
+                                     node->lhs->type->toString(),
+                                     node->rhs->type->toString());
+                node->type = node->lhs->type;
+            }
+        } else if (node->kind == BinaryOperator::Kind::Modulo) {
+            node->type = _op_inferer.inferBinaryModulo(node->lhs->type,
+                                                       node->rhs->type);
+            if (!node->type) {
+                _diag_engine->report(node->location, 3004,
+                                     node->lhs->type->toString(),
+                                     node->rhs->type->toString());
+                node->type = node->lhs->type;
+            }
+        } else if (node->kind == BinaryOperator::Kind::LogicalAnd
+                   || node->kind == BinaryOperator::Kind::LogicalOr) {
+            node->type = _op_inferer.inferBinaryAndOrOr(node->lhs->type,
+                                                        node->rhs->type);
+            if (!node->type) {
+                _diag_engine->report(node->location, 3005,
+                                     node->lhs->type->toString(),
+                                     node->rhs->type->toString());
+                node->type = _type_manager->getBoolType();
+            }
         }
-        node->type = _type_manager->getBoolType();
-    } else if (node->kind == BinaryOperator::Kind::Add
-               || node->kind == BinaryOperator::Kind::Minus
-               || node->kind == BinaryOperator::Kind::Times
-               || node->kind == BinaryOperator::Kind::Divide
-               || node->kind == BinaryOperator::Kind::Modulo) {
-        node->lhs = addL2RCast(std::move(node->lhs));
-        node->rhs = addL2RCast(std::move(node->rhs));
-
-        if (node->lhs->type != node->rhs->type) {
-            _diag_engine->report(node->location, 3004);
-        }
-        node->type = node->lhs->type;
-    } else if (node->kind == BinaryOperator::Kind::LogicalAnd
-               || node->kind == BinaryOperator::Kind::LogicalOr) {
-        node->lhs = addL2RCast(std::move(node->lhs));
-        node->rhs = addL2RCast(std::move(node->rhs));
-
-        auto bool_ty = _type_manager->getBoolType();
-        if (node->lhs->type != bool_ty || node->rhs->type != bool_ty) {
-            _diag_engine->report(node->location, 3005);
-        }
-        node->type = bool_ty;
     }
 }
 
 void SemaVisitor::visit(UnaryOperator* node) {
     node->expr->accept(this);
-    if (node->kind == UnaryOperator::Kind::Plus
-        || node->kind == UnaryOperator::Kind::Minus) {
-        node->expr = addL2RCast(std::move(node->expr));
-        if (node->expr->type != _type_manager->getIntType()
-            || node->expr->type != _type_manager->getDoubleType()) {
-            _diag_engine->report(node->location, 3006);
-        }
-        node->type = node->expr->type;
-    } else if (node->kind == UnaryOperator::Kind::LogicalNot) {
-        node->expr = addL2RCast(std::move(node->expr));
-        if (node->expr->type != _type_manager->getBoolType()) {
-            _diag_engine->report(node->location, 3007);
-        }
-        node->type = node->expr->type;
-    } else if (node->kind == UnaryOperator::Kind::PtrDeref) {
-        node->expr = addL2RCast(std::move(node->expr));
-        if (node->expr->type->variety != Type::Variety::Pointer) {
-            _diag_engine->report(node->location, 3008);
-            node->type = node->expr->type;
-            return;
-        }
-        auto ptr_subty = static_cast<PointerType*>(node->expr->type)->subtype;
-        node->type = _type_manager->getLValueType(ptr_subty);
-    } else if (node->kind == UnaryOperator::Kind::AddressOf) {
+    if (node->kind == UnaryOperator::Kind::AddressOf) {
         if (node->expr->type->variety != Type::Variety::LValue) {
             _diag_engine->report(node->location, 3009);
             node->type = node->expr->type;
@@ -98,6 +111,28 @@ void SemaVisitor::visit(UnaryOperator* node) {
         }
         node->type = _type_manager->getPointerType(
             static_cast<LValueType*>(node->expr->type)->subtype);
+    } else {
+        node->expr = addL2RCast(std::move(node->expr));
+        if (node->kind == UnaryOperator::Kind::Plus
+            || node->kind == UnaryOperator::Kind::Minus) {
+            node->type = _op_inferer.inferUnaryPlusOrMinus(node->expr->type);
+            if (!node->type) {
+                _diag_engine->report(node->location, 3006);
+                node->type = node->expr->type;
+            }
+        } else if (node->kind == UnaryOperator::Kind::LogicalNot) {
+            node->type = _op_inferer.inferUnaryNot(node->expr->type);
+            if (!node->type) {
+                _diag_engine->report(node->location, 3007);
+                node->type = _type_manager->getBoolType();
+            }
+        } else if (node->kind == UnaryOperator::Kind::PtrDeref) {
+            node->type = _op_inferer.inferUnaryPtrDeref(node->expr->type);
+            if (!node->type) {
+                _diag_engine->report(node->location, 3008);
+                node->type = node->expr->type;
+            }
+        }
     }
 }
 
@@ -332,19 +367,19 @@ void SemaVisitor::visit(Module* node) {
 }
 
 } // namespace ast
-} // namespace elang
 
 // utils
-std::unique_ptr<elang::ast::Expression>
-addL2RCast(std::unique_ptr<elang::ast::Expression>&& expr) {
-    if (expr->type->variety == elang::Type::Variety::LValue) {
+std::unique_ptr<ast::Expression>
+addL2RCast(std::unique_ptr<ast::Expression>&& expr) {
+    if (expr->type->variety == Type::Variety::LValue) {
         auto loc = expr->location;
-        auto ty = static_cast<elang::LValueType*>(expr->type)->subtype;
-        auto l2r_cast
-            = std::make_unique<elang::ast::LValueToRValueCastExpression>(
-                std::move(expr), loc);
+        auto ty = static_cast<LValueType*>(expr->type)->subtype;
+        auto l2r_cast = std::make_unique<ast::LValueToRValueCastExpression>(
+            std::move(expr), loc);
         expr = std::move(l2r_cast);
         expr->type = ty;
     }
     return std::move(expr);
 }
+
+} // namespace elang

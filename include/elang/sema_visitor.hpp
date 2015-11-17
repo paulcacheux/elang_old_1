@@ -3,20 +3,24 @@
 
 #include <vector>
 #include <string>
-#include <map>
 
-#include <elang/source_manager.hpp>
 #include <elang/ast_visitor.hpp>
 #include <elang/symbol_table.hpp>
-#include <elang/type.hpp>
-#include <elang/diagnostic.hpp>
+#include <elang/op_inferer.hpp>
 
 namespace elang {
+
+class SourceManager;
+class TypeManager;
+class Type;
+class DiagnosticEngine;
+
 namespace ast {
 
 class SemaVisitor : public Visitor {
     TypeManager* _type_manager;
     DiagnosticEngine* _diag_engine;
+    OpInferer _op_inferer;
     std::unique_ptr<LocalTable> _local_table;
     GlobalTable _global_table;
 
